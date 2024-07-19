@@ -15,26 +15,47 @@ const LOGO_SIZE = {
     [SIZE.L]: '36',
 };
 
+const SPINNER_SIZE = {
+    [SIZE.S]: '24',
+    [SIZE.M]: '26',
+    [SIZE.L]: '28',
+};
+
+
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+
 class AlfaPlugin {
-    constructor({ size = 'M', variant = 'WHITE' }) {
+    constructor({ view, partner }) {
+        const { size = 'M', variant = 'WHITE', root } = view;
+
         this.size = this.isCorrectSize(size) ? size.toUpperCase() : SIZE.L;
         this.variant = this.isCorrectVariant(variant) ? variant.toUpperCase() : VARIANT.WHITE;
 
         this.element = document.createElement('button');
         this.logo = document.createElement('svg');
         this.span = document.createElement('span');
-        this.span.innerText = 'Купить в рассрочку'
+        this.spinner = document.createElement('div');
+        this.span.innerText = 'Купить в рассрочку';
 
         this.element.insertAdjacentElement('beforeend', this.logo);
         this.element.insertAdjacentElement('beforeend', this.span);
+        this.element.insertAdjacentElement('beforeend', this.spinner);
+
+        this.alfaPluginStyleSheet = document.createElement('style');
+        document.head.appendChild(this.alfaPluginStyleSheet);
+        this.styleSheet = this.alfaPluginStyleSheet.sheet;
 
         this.insertNecessaryRules();
         this.configureLayout();
-
         this.addClickHandler();
-        return this.element;
+
+        const { successRedirectLink, failureRedirectLink } = partner
+
+        this.successRedirectLink = successRedirectLink
+        this.failureRedirectLink = failureRedirectLink;
+
+        root.insertAdjacentElement('beforeend', this.element)
     }
 
     isCorrectSize(size) {
@@ -46,13 +67,13 @@ class AlfaPlugin {
     }
 
     insertNecessaryRules() {
-        document.styleSheets[0].insertRule(`
+        this.styleSheet.insertRule(`
             .alfa__btn__hide {
                 display: none;
             }
         `);
 
-        document.styleSheets[0].insertRule(
+        this.styleSheet.insertRule(
             `.alfa__btn__base {
                 display: flex;
                 justify-content: center;
@@ -66,14 +87,34 @@ class AlfaPlugin {
             }`
         );
 
-        document.styleSheets[0].insertRule(
+        this.styleSheet.insertRule(`
+            .alfa__btn__spinner {
+                display: inline-block;
+                width: ${SPINNER_SIZE[this.size]}px;
+                height: ${SPINNER_SIZE[this.size]}px;
+                border: 3px solid rgba(0, 0, 0, 0.1);
+                border-radius: 50%;
+                border-top-color: #333;
+                animation: spin 1s ease-in-out infinite;
+            }
+        `);
+
+        this.styleSheet.insertRule(`
+                @keyframes spin {
+                    to {
+                        transform: rotate(360deg);
+                    }
+                }
+        `);
+
+        this.styleSheet.insertRule(
             `.alfa__btn__white {
                 background: #fff;
                 color: #000;
             }`
         );
 
-        document.styleSheets[0].insertRule(
+        this.styleSheet.insertRule(
             `.alfa__btn__red {
                 background: #ef3024;
                 color: #fff;
@@ -87,6 +128,7 @@ class AlfaPlugin {
 
         this.addLogo();
         this.customizeSize();
+        this.createSpinner();
     }
 
     addLogo() {
@@ -104,6 +146,14 @@ class AlfaPlugin {
             </svg>`
     }
 
+    createSpinner() {
+        this.spinner.classList.add('alfa__btn__spinner', 'alfa__btn__hide');
+    }
+
+    toggleSpinnerVisibility() {
+        this.spinner.classList.toggle('alfa__btn__hide');
+    }
+
     toggleLogoVisibility() {
         this.logo.classList.toggle('alfa__btn__hide');
     }
@@ -111,7 +161,7 @@ class AlfaPlugin {
     customizeSize() {
         switch (this.size) {
             case SIZE.S:
-                document.styleSheets[0].insertRule(`
+                this.styleSheet.insertRule(`
                     .alfa__btn__s {
                         width: 156px;
                         min-height: 36px;
@@ -124,7 +174,7 @@ class AlfaPlugin {
                 return this;
 
             case SIZE.M:
-                document.styleSheets[0].insertRule(`
+                this.styleSheet.insertRule(`
                     .alfa__btn__m {
                         width: 180px;
                         min-height: 46px;
@@ -138,7 +188,7 @@ class AlfaPlugin {
 
             case SIZE.L:
             default:
-                document.styleSheets[0].insertRule(`
+                this.styleSheet.insertRule(`
                     .alfa__btn__l {
                         width: 210px;
                         min-height: 50px;
@@ -147,24 +197,23 @@ class AlfaPlugin {
                     }
                 `);
 
-
                 this.element.classList.add('alfa__btn__l');
                 return this;
         }
     }
 
-    disableButton(newValue) {
-        if (newValue) {
-            this.span.innerText = '...';
+    disableButton(isDisabled) {
+        if (isDisabled) {
             this.element.disabled = true;
+            this.span.classList.add('alfa__btn__hide');
             this.element.style.cursor = 'not-allowed';
 
             return this;
         }
 
-        this.span.innerText = 'Купить в рассрочку';
         this.element.disabled = false;
         this.element.style.cursor = '';
+        this.span.classList.remove('alfa__btn__hide');
     }
 
     toggleDisableButton() {
@@ -174,6 +223,8 @@ class AlfaPlugin {
     togglePendingProcess() {
         this.toggleDisableButton();
         this.toggleLogoVisibility();
+
+        this.toggleSpinnerVisibility();
     }
 
     addClickHandler() {
@@ -181,13 +232,15 @@ class AlfaPlugin {
             try {
                 this.togglePendingProcess();
 
-                await wait(5_00);
+                await wait(1_000);
                 const response = await fetch('https://jsonplaceholder.typicode.com/users');
                 const data =  await response.json();
 
-                console.log('### data', data);
+                window.open(this.successRedirectLink, '_self');
             } catch (e) {
                 console.log('### Error: ', e);
+
+                window.open(this.failureRedirectLink, '_self');
             } finally {
                 this.togglePendingProcess();
             }
